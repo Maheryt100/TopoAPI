@@ -1,7 +1,6 @@
-# """app/models/staging.py
-"""
-Modèles SQLAlchemy pour les tables STAGING
-Tables séparées pour demandeurs et propriétés
+"""app/models/staging.py
+Modèles SQLAlchemy pour les tables STAGING - Version SIMPLIFIÉE
+✅ Suppression de target_district_id (numero_ouverture suffit)
 """
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, JSON, ForeignKey, BigInteger
 from sqlalchemy.dialects.postgresql import UUID
@@ -37,15 +36,14 @@ class TopoStagingDemandeur(Base):
     topo_user_id = Column(Integer, ForeignKey('topo_users.id'), nullable=False)
     topo_user_name = Column(String(100))
     
-    # Cible GeODOC
-    target_dossier_id = Column(Integer, nullable=False)
-    target_district_id = Column(Integer, nullable=False)
+    # ✅ SIMPLIFIÉ: Seulement numero_ouverture
+    numero_ouverture = Column(String(50), nullable=False, index=True)
     
     # Données brutes JSON (tous champs optionnels)
     payload = Column(JSON, nullable=False)
     
     # Statut validation
-    status = Column(String(20), default='PENDING')
+    status = Column(String(20), default='PENDING', index=True)
     error_reason = Column(Text)
     validated_at = Column(DateTime(timezone=True))
     validated_by = Column(BigInteger)
@@ -71,15 +69,14 @@ class TopoStagingPropriete(Base):
     topo_user_id = Column(Integer, ForeignKey('topo_users.id'), nullable=False)
     topo_user_name = Column(String(100))
     
-    # Cible GeODOC
-    target_dossier_id = Column(Integer, nullable=False)
-    target_district_id = Column(Integer, nullable=False)
+    # ✅ SIMPLIFIÉ: Seulement numero_ouverture
+    numero_ouverture = Column(String(50), nullable=False, index=True)
     
     # Données brutes JSON (tous champs optionnels)
     payload = Column(JSON, nullable=False)
     
     # Statut validation
-    status = Column(String(20), default='PENDING')
+    status = Column(String(20), default='PENDING', index=True)
     error_reason = Column(Text)
     validated_at = Column(DateTime(timezone=True))
     validated_by = Column(BigInteger)
@@ -91,20 +88,34 @@ class TopoStagingPropriete(Base):
     files = relationship("TopoStagingFile", back_populates="propriete", cascade="all, delete-orphan")
 
 class TopoStagingFile(Base):
-    """Fichiers attachés aux imports STAGING"""
+    """
+    Fichiers attachés aux imports STAGING
+    ✅ SIMPLIFIÉ: Seulement numero_ouverture (pas target_district_id)
+    ✅ Peut être lié à dossier, demandeur OU propriété
+    """
     __tablename__ = "topo_staging_files"
     
     id = Column(Integer, primary_key=True)
     
-    # Relations polymorphiques
+    # ✅ Identification dossier SIMPLIFIÉE
+    numero_ouverture = Column(String(50), nullable=False, index=True)
+    
+    # ✅ Associations optionnelles
     demandeur_id = Column(BigInteger, ForeignKey('topo_staging_demandeurs.id', ondelete='CASCADE'))
     propriete_id = Column(BigInteger, ForeignKey('topo_staging_proprietes.id', ondelete='CASCADE'))
+    
+    # ✅ Identifiants métier optionnels (pour association ultérieure)
+    cin = Column(String(50), index=True)  # Pour lier à un demandeur
+    lot = Column(String(50), index=True)  # Pour lier à une propriété
     
     # Informations fichier
     original_name = Column(String(255), nullable=False)
     stored_name = Column(String(255), nullable=False)
     file_size = Column(Integer, nullable=False)
     mime_type = Column(String(100))
+    
+    # Catégorie fichier (optionnel)
+    category = Column(String(50), index=True)  # 'cin', 'plan', 'titre', 'autre'
     
     uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
     
