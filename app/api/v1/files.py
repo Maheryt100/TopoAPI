@@ -1,8 +1,4 @@
 """app/api/v1/files.py
-Routes pour l'upload de fichiers INDÉPENDANT
-✅ Upload sans demandeur/propriété préexistant
-✅ Association possible via cin/lot
-✅ SIMPLIFIÉ: Seulement numero_ouverture (pas de target_district_id)
 """
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from sqlalchemy.orm import Session

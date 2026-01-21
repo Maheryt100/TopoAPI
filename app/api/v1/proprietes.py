@@ -1,7 +1,6 @@
 # """app/api/v1/proprietes.py
 """
-Routes pour les imports PROPRIÉTÉ - Version 2.0
-Utilisation de numero_ouverture + validation stricte
+Routes pour les imports PROPRIÉTÉ 
 """
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from sqlalchemy.orm import Session
@@ -54,9 +53,9 @@ def validate_date_iso(value: Optional[str], field_name: str):
 
 @router.post("/", status_code=201, response_model=ImportResponse)
 async def create_propriete(
-    # ✅ Champs obligatoires MODIFIÉS
+    # Champs obligatoires MODIFIÉS
     numero_ouverture: str = Form(..., description="Numéro d'ouverture du dossier"),
-    target_district_id: int = Form(..., description="ID du district cible"),
+    # target_district_id: int = Form(..., description="ID du district cible"),
     
     # Champs propriété (tous optionnels avec validation)
     lot: Optional[str] = Form(None, description="Numéro de lot"),
@@ -182,7 +181,7 @@ async def create_propriete(
         topo_user_id=user.id,
         topo_user_name=user.full_name,
         numero_ouverture=numero_ouverture,
-        target_district_id=target_district_id,
+        # target_district_id=target_district_id,
         payload=payload,
         checksum=checksum,
         status='PENDING'
@@ -206,7 +205,7 @@ async def create_propriete(
                 staging_file = TopoStagingFile(
                     propriete_id=staging.id,
                     numero_ouverture=numero_ouverture,
-                    target_district_id=target_district_id,
+                    # target_district_id=target_district_id,
                     lot=lot.strip() if lot and lot.strip() else None,
                     original_name=file_info['original_name'],
                     stored_name=file_info['stored_name'],
@@ -256,7 +255,7 @@ def get_propriete_staging(
             "payload": staging.payload,
             "status": staging.status,
             "numero_ouverture": staging.numero_ouverture,
-            "target_district_id": staging.target_district_id,
+            # "target_district_id": staging.target_district_id,
             "topo_user_name": staging.topo_user_name,
             "created_at": staging.created_at.isoformat(),
             "error_reason": staging.error_reason

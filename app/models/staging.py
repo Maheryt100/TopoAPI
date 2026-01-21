@@ -1,11 +1,11 @@
 """app/models/staging.py
-Modèles SQLAlchemy pour les tables STAGING - Version SIMPLIFIÉE
-✅ Suppression de target_district_id (numero_ouverture suffit)
+Modeles SQLAlchemy pour les tables STAGING 
+Fichiers associes au dossier uniquement
+Statuts: PENDING, ARCHIVED, REJECTED
 """
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, JSON, ForeignKey, BigInteger
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func, text
-from sqlalchemy.orm import relationship
 from app.core.database import Base
 
 class TopoUser(Base):
@@ -27,98 +27,76 @@ class TopoStagingDemandeur(Base):
     
     id = Column(BigInteger, primary_key=True)
     
-    # Métadonnées import
     source = Column(String(50), default='topo', nullable=False)
     batch_id = Column(UUID(as_uuid=True), server_default=text('gen_random_uuid()'))
     checksum = Column(String(64))
     
-    # Utilisateur terrain
     topo_user_id = Column(Integer, ForeignKey('topo_users.id'), nullable=False)
     topo_user_name = Column(String(100))
     
-    # ✅ SIMPLIFIÉ: Seulement numero_ouverture
     numero_ouverture = Column(String(50), nullable=False, index=True)
     
-    # Données brutes JSON (tous champs optionnels)
     payload = Column(JSON, nullable=False)
     
-    # Statut validation
     status = Column(String(20), default='PENDING', index=True)
     error_reason = Column(Text)
-    validated_at = Column(DateTime(timezone=True))
-    validated_by = Column(BigInteger)
     
-    # Timestamps
+    archived_at = Column(DateTime(timezone=True))
+    archived_by_email = Column(String(100))
+    archived_note = Column(Text)
+    
+    rejected_at = Column(DateTime(timezone=True))
+    rejected_by_email = Column(String(100))
+    rejection_reason = Column(Text)
+    
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
-    # Relations
-    files = relationship("TopoStagingFile", back_populates="demandeur", cascade="all, delete-orphan")
 
 class TopoStagingPropriete(Base):
-    """Table STAGING pour les propriétés venant du terrain"""
+    """Table STAGING pour les proprietes venant du terrain"""
     __tablename__ = "topo_staging_proprietes"
     
     id = Column(BigInteger, primary_key=True)
     
-    # Métadonnées import
     source = Column(String(50), default='topo', nullable=False)
     batch_id = Column(UUID(as_uuid=True), server_default=text('gen_random_uuid()'))
     checksum = Column(String(64))
     
-    # Utilisateur terrain
     topo_user_id = Column(Integer, ForeignKey('topo_users.id'), nullable=False)
     topo_user_name = Column(String(100))
     
-    # ✅ SIMPLIFIÉ: Seulement numero_ouverture
     numero_ouverture = Column(String(50), nullable=False, index=True)
     
-    # Données brutes JSON (tous champs optionnels)
     payload = Column(JSON, nullable=False)
     
-    # Statut validation
     status = Column(String(20), default='PENDING', index=True)
     error_reason = Column(Text)
-    validated_at = Column(DateTime(timezone=True))
-    validated_by = Column(BigInteger)
     
-    # Timestamps
+    archived_at = Column(DateTime(timezone=True))
+    archived_by_email = Column(String(100))
+    archived_note = Column(Text)
+    
+    rejected_at = Column(DateTime(timezone=True))
+    rejected_by_email = Column(String(100))
+    rejection_reason = Column(Text)
+    
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
-    # Relations
-    files = relationship("TopoStagingFile", back_populates="propriete", cascade="all, delete-orphan")
 
 class TopoStagingFile(Base):
     """
-    Fichiers attachés aux imports STAGING
-    ✅ SIMPLIFIÉ: Seulement numero_ouverture (pas target_district_id)
-    ✅ Peut être lié à dossier, demandeur OU propriété
+    Fichiers attaches aux dossiers
+    Associes au dossier uniquement via numero_ouverture
     """
     __tablename__ = "topo_staging_files"
     
     id = Column(Integer, primary_key=True)
     
-    # ✅ Identification dossier SIMPLIFIÉE
     numero_ouverture = Column(String(50), nullable=False, index=True)
     
-    # ✅ Associations optionnelles
-    demandeur_id = Column(BigInteger, ForeignKey('topo_staging_demandeurs.id', ondelete='CASCADE'))
-    propriete_id = Column(BigInteger, ForeignKey('topo_staging_proprietes.id', ondelete='CASCADE'))
-    
-    # ✅ Identifiants métier optionnels (pour association ultérieure)
-    cin = Column(String(50), index=True)  # Pour lier à un demandeur
-    lot = Column(String(50), index=True)  # Pour lier à une propriété
-    
-    # Informations fichier
     original_name = Column(String(255), nullable=False)
     stored_name = Column(String(255), nullable=False)
     file_size = Column(Integer, nullable=False)
     mime_type = Column(String(100))
     
-    # Catégorie fichier (optionnel)
-    category = Column(String(50), index=True)  # 'cin', 'plan', 'titre', 'autre'
+    category = Column(String(50), index=True)
     
     uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
-    
-    # Relations
-    demandeur = relationship("TopoStagingDemandeur", back_populates="files")
-    propriete = relationship("TopoStagingPropriete", back_populates="files")

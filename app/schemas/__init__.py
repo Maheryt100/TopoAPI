@@ -1,15 +1,12 @@
-# """app/schemas/__init__.py
-"""
-Schémas Pydantic avec validation stricte des enums
+"""app/schemas/__init__.py
+Schemas Pydantic avec validation stricte des enums
 """
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional, Literal
+from typing import Optional
 from datetime import date
 from enum import Enum
 
-# ========================================
 # ENUMS STRICTS
-# ========================================
 
 class TitreDemandeur(str, Enum):
     MONSIEUR = "Monsieur"
@@ -21,21 +18,21 @@ class Sexe(str, Enum):
     FEMME = "Femme"
 
 class SituationFamiliale(str, Enum):
-    NON_SPECIFIEE = "Non spécifiée"
-    CELIBATAIRE = "Célibataire"
-    MARIE = "Marié(e)"
+    NON_SPECIFIEE = "Non specifiee"
+    CELIBATAIRE = "Celibataire"
+    MARIE = "Marie(e)"
     VEUF = "Veuf/Veuve"
-    DIVORCE = "Divorcé(e)"
+    DIVORCE = "Divorce(e)"
 
 class RegimeMatrimonial(str, Enum):
-    NON_SPECIFIE = "Non spécifié"
+    NON_SPECIFIE = "Non specifie"
     ZARA_MIRA = "Zara-Mira"
     KITAY_TELO = "Kitay telo an-dalana"
-    SEPARATION = "Séparations des biens"
+    SEPARATION = "Separations des biens"
 
 class Charge(str, Enum):
     VOIE_PUBLIQUE = "Voie(s) publique(e)"
-    VOIE_ACCES = "Voie(s) d'accès"
+    VOIE_ACCES = "Voie(s) d'acces"
     SERVITUDE = "Servitude(s)"
     AUCUNE = "Aucune"
 
@@ -47,7 +44,7 @@ class Nature(str, Enum):
 class Vocation(str, Enum):
     EDILITAIRE = "Edilitaire"
     AGRICOLE = "Agricole"
-    FORESTIERE = "Forestière"
+    FORESTIERE = "Forestiere"
     TOURISTIQUE = "Touristique"
 
 class TypeOperation(str, Enum):
@@ -61,9 +58,7 @@ class FileCategory(str, Enum):
     REQUISITION = "requisition"
     AUTRE = "autre"
 
-# ========================================
 # AUTH
-# ========================================
 
 class LoginRequest(BaseModel):
     username: str
@@ -73,17 +68,12 @@ class LoginResponse(BaseModel):
     access_token: str
     user: dict
 
-# ========================================
 # DEMANDEUR
-# ========================================
 
 class DemandeurCreate(BaseModel):
-    """Création demandeur - tous champs optionnels sauf cible"""
-    # ✅ Cible obligatoire
-    numero_ouverture: str = Field(..., description="Numéro d'ouverture du dossier")
-    target_district_id: int = Field(..., description="ID du district")
+    """Creation demandeur - tous champs optionnels sauf numero_ouverture"""
+    numero_ouverture: str = Field(..., description="Numero d'ouverture du dossier")
     
-    # Identité
     titre_demandeur: Optional[TitreDemandeur] = None
     nom_demandeur: Optional[str] = None
     prenom_demandeur: Optional[str] = None
@@ -92,23 +82,19 @@ class DemandeurCreate(BaseModel):
     sexe: Optional[Sexe] = None
     occupation: Optional[str] = None
     
-    # Filiation
     nom_pere: Optional[str] = None
     nom_mere: Optional[str] = None
     
-    # CIN
     cin: Optional[str] = None
     date_delivrance: Optional[str] = Field(None, description="Format ISO: YYYY-MM-DD")
     lieu_delivrance: Optional[str] = None
     date_delivrance_duplicata: Optional[str] = Field(None, description="Format ISO: YYYY-MM-DD")
     lieu_delivrance_duplicata: Optional[str] = None
     
-    # Contact
     domiciliation: Optional[str] = None
     telephone: Optional[str] = None
     nationalite: Optional[str] = "Malagasy"
     
-    # Situation familiale
     situation_familiale: Optional[SituationFamiliale] = None
     regime_matrimoniale: Optional[RegimeMatrimonial] = None
     date_mariage: Optional[str] = Field(None, description="Format ISO: YYYY-MM-DD")
@@ -126,44 +112,34 @@ class DemandeurCreate(BaseModel):
         except ValueError:
             raise ValueError('Date must be in ISO format YYYY-MM-DD')
 
-# ========================================
 # PROPRIETE
-# ========================================
 
 class ProprieteCreate(BaseModel):
-    """Création propriété - tous champs optionnels sauf cible"""
-    # ✅ Cible obligatoire
-    numero_ouverture: str = Field(..., description="Numéro d'ouverture du dossier")
-    target_district_id: int = Field(..., description="ID du district")
+    """Creation propriete - tous champs optionnels sauf numero_ouverture"""
+    numero_ouverture: str = Field(..., description="Numero d'ouverture du dossier")
     
-    # Identification
     lot: Optional[str] = None
     titre: Optional[str] = None
     contenance: Optional[int] = Field(None, description="Contenance en m²")
     proprietaire: Optional[str] = None
     
-    # Liens
     propriete_mere: Optional[str] = None
     titre_mere: Optional[str] = None
     
-    # Caractéristiques
     charge: Optional[Charge] = None
     situation: Optional[str] = None
     nature: Optional[Nature] = None
     vocation: Optional[Vocation] = None
     
-    # Administratif
     numero_FN: Optional[str] = None
     numero_requisition: Optional[str] = None
     type_operation: Optional[TypeOperation] = None
     
-    # Dates
     date_requisition: Optional[str] = Field(None, description="Format ISO: YYYY-MM-DD")
     date_depot_1: Optional[str] = Field(None, description="Format ISO: YYYY-MM-DD")
     date_depot_2: Optional[str] = Field(None, description="Format ISO: YYYY-MM-DD")
     date_approbation_acte: Optional[str] = Field(None, description="Format ISO: YYYY-MM-DD")
     
-    # Dépôts et inscriptions
     dep_vol_inscription: Optional[str] = None
     numero_dep_vol_inscription: Optional[str] = None
     dep_vol_requisition: Optional[str] = None
@@ -180,28 +156,20 @@ class ProprieteCreate(BaseModel):
         except ValueError:
             raise ValueError('Date must be in ISO format YYYY-MM-DD')
 
-# ========================================
 # FILES
-# ========================================
 
 class FileUploadRequest(BaseModel):
-    """Upload fichiers indépendant"""
-    numero_ouverture: str = Field(..., description="Numéro d'ouverture du dossier")
-    target_district_id: int = Field(..., description="ID du district")
-    cin: Optional[str] = Field(None, description="CIN du demandeur (si association)")
-    lot: Optional[str] = Field(None, description="Lot de la propriété (si association)")
-    category: Optional[FileCategory] = Field(None, description="Catégorie du fichier")
+    """Upload fichiers - associe au dossier uniquement"""
+    numero_ouverture: str = Field(..., description="Numero d'ouverture du dossier")
+    category: Optional[FileCategory] = Field(None, description="Categorie du fichier")
 
-# ========================================
 # RESPONSES
-# ========================================
 
 class ImportResponse(BaseModel):
     success: bool
     import_id: int
     batch_id: str
     entity_type: str
-    files_uploaded: int = 0
     
 class StagingListItem(BaseModel):
     id: int
@@ -209,7 +177,6 @@ class StagingListItem(BaseModel):
     batch_id: str
     status: str
     numero_ouverture: str
-    target_district_id: int
     topo_user_name: str
     created_at: str
     files_count: int

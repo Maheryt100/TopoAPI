@@ -57,7 +57,7 @@ def validate_date_iso(value: Optional[str], field_name: str):
 async def create_demandeur(
     # ✅ Champs obligatoires MODIFIÉS
     numero_ouverture: str = Form(..., description="Numéro d'ouverture du dossier"),
-    target_district_id: int = Form(..., description="ID du district cible"),
+    # target_district_id: int = Form(..., description="ID du district cible"),
     
     # Champs identité (optionnels avec validation)
     cin: Optional[str] = Form(None, description="Numéro CIN"),
@@ -100,8 +100,8 @@ async def create_demandeur(
 ):
     """
     Créer un import DEMANDEUR
-    ✅ Validation stricte des enums
-    ✅ Utilisation de numero_ouverture
+    Validation stricte des enums
+    Utilisation de numero_ouverture
     """
     
     # ========================================
@@ -186,7 +186,7 @@ async def create_demandeur(
         topo_user_id=user.id,
         topo_user_name=user.full_name,
         numero_ouverture=numero_ouverture,
-        target_district_id=target_district_id,
+        # target_district_id=target_district_id,
         payload=payload,
         checksum=checksum,
         status='PENDING'
@@ -210,7 +210,7 @@ async def create_demandeur(
                 staging_file = TopoStagingFile(
                     demandeur_id=staging.id,
                     numero_ouverture=numero_ouverture,
-                    target_district_id=target_district_id,
+                    # target_district_id=target_district_id,
                     cin=cin.strip() if cin and cin.strip() else None,
                     original_name=file_info['original_name'],
                     stored_name=file_info['stored_name'],
@@ -260,7 +260,7 @@ def get_demandeur_staging(
             "payload": staging.payload,
             "status": staging.status,
             "numero_ouverture": staging.numero_ouverture,
-            "target_district_id": staging.target_district_id,
+            # "target_district_id": staging.target_district_id,
             "topo_user_name": staging.topo_user_name,
             "created_at": staging.created_at.isoformat(),
             "error_reason": staging.error_reason

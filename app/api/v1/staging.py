@@ -1,7 +1,5 @@
 """app/api/v1/staging.py
-Routes pour la lecture et validation du staging - Version SIMPLIFIÉE
-✅ Affichage unifié: demandeurs + propriétés + fichiers orphelins
-✅ Suppression target_district_id
+Routes pour la lecture et validation du staging
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -225,7 +223,7 @@ def get_import_detail(
 ):
     """
     Récupérer UN import par ID avec tous ses fichiers
-    ✅ NOUVEAU: Gère aussi les imports de fichiers virtuels
+    NOUVEAU: Gère aussi les imports de fichiers virtuels
     
     GET /api/imports/123
     GET /api/imports/files_D2024-001
