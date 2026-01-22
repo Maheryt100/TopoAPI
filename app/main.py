@@ -355,42 +355,113 @@ async def upload_files(
 
 # LISTE IMPORTS
 @app.get("/api/imports/")
-async def list_imports(status: Optional[str] = "PENDING", entity_type: Optional[str] = None, numero_ouverture: Optional[str] = None,
-                      user: TopoUser = Depends(get_current_user), db: Session = Depends(get_db)):
+async def list_imports(
+    status: Optional[str] = "PENDING",  # ← Valeur par défaut en MAJUSCULE
+    entity_type: Optional[str] = None,
+    numero_ouverture: Optional[str] = None,
+    user: TopoUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Liste tous les imports en staging avec enrichissement des donnees
+    
+    Query params:
+    - status: PENDING, ARCHIVED, REJECTED
+    - entity_type: demandeur, propriete, fichier
+    - numero_ouverture: Filtrer par numero de dossier
+    """
+    
     results = []
     
+    # ✅ CORRECTION : Normaliser le statut (accepter minuscules et majuscules)
+    if status:
+        status = status.upper()  # ← AJOUTER CETTE LIGNE
+    
+    # Verifier que le statut est valide
+    valid_statuses = ['PENDING', 'ARCHIVED', 'REJECTED']
+    if status and status not in valid_statuses:
+        raise HTTPException(400, f"Statut invalide. Valeurs acceptees: {', '.join(valid_statuses)}")
+    
+    # DEMANDEURS
     if not entity_type or entity_type == 'demandeur':
-        q = db.query(TopoStagingDemandeur)
-        if status:
-            q = q.filter(TopoStagingDemandeur.status == status.upper())
-        if numero_ouverture:
-            q = q.filter(TopoStagingDemandeur.numero_ouverture == numero_ouverture)
+        query_dem = db.query(TopoStagingDemandeur)
         
-        for d in q.order_by(TopoStagingDemandeur.created_at.desc()).all():
-            fc = db.query(TopoStagingFile).filter(TopoStagingFile.numero_ouverture == d.numero_ouverture).count()
-            results.append({"id": d.id, "entity_type": "demandeur", "batch_id": str(d.batch_id), "status": d.status.lower(),
-                          "numero_ouverture": d.numero_ouverture, "topo_user_name": d.topo_user_name, "import_date": d.created_at.isoformat(),
-                          "files_count": fc, "raw_data": d.payload, "is_archived": d.status == 'ARCHIVED', "can_import": d.status in ['PENDING', 'ARCHIVED'],
-                          "has_errors": bool(d.error_reason), "error_summary": d.error_reason, "rejection_reason": d.rejection_reason or d.error_reason,
-                          "processed_at": d.rejected_at.isoformat() if d.rejected_at else None})
+        if status:
+            query_dem = query_dem.filter(TopoStagingDemandeur.status == status)
+        if numero_ouverture:
+            query_dem = query_dem.filter(TopoStagingDemandeur.numero_ouverture == numero_ouverture)
+        
+        demandeurs = query_dem.order_by(TopoStagingDemandeur.created_at.desc()).all()
+        
+        for d in demandeurs:
+            fc = db.query(TopoStagingFile).filter(
+                TopoStagingFile.numero_ouverture == d.numero_ouverture
+            ).count()
+            
+            results.append({
+                "id": d.id,
+                "entity_type": "demandeur",
+                "batch_id": str(d.batch_id),
+                "status": d.status.lower(),
+                "numero_ouverture": d.numero_ouverture,
+                "topo_user_name": d.topo_user_name,
+                "import_date": d.created_at.isoformat(),
+                "files_count": fc,
+                "raw_data": d.payload,
+                "is_archived": d.status == 'ARCHIVED',
+                "can_import": d.status in ['PENDING', 'ARCHIVED'],
+                "has_errors": bool(d.error_reason),
+                "error_summary": d.error_reason,
+                "rejection_reason": d.rejection_reason or d.error_reason,
+                "processed_at": d.rejected_at.isoformat() if d.rejected_at else (
+                    d.archived_at.isoformat() if d.archived_at else None
+                )
+            })
     
+    # PROPRIETES
     if not entity_type or entity_type == 'propriete':
-        q = db.query(TopoStagingPropriete)
-        if status:
-            q = q.filter(TopoStagingPropriete.status == status.upper())
-        if numero_ouverture:
-            q = q.filter(TopoStagingPropriete.numero_ouverture == numero_ouverture)
+        query_prop = db.query(TopoStagingPropriete)
         
-        for p in q.order_by(TopoStagingPropriete.created_at.desc()).all():
-            fc = db.query(TopoStagingFile).filter(TopoStagingFile.numero_ouverture == p.numero_ouverture).count()
-            results.append({"id": p.id, "entity_type": "propriete", "batch_id": str(p.batch_id), "status": p.status.lower(),
-                          "numero_ouverture": p.numero_ouverture, "topo_user_name": p.topo_user_name, "import_date": p.created_at.isoformat(),
-                          "files_count": fc, "raw_data": p.payload, "is_archived": p.status == 'ARCHIVED', "can_import": p.status in ['PENDING', 'ARCHIVED'],
-                          "has_errors": bool(p.error_reason), "error_summary": p.error_reason, "rejection_reason": p.rejection_reason or p.error_reason,
-                          "processed_at": p.rejected_at.isoformat() if p.rejected_at else None})
+        if status:
+            query_prop = query_prop.filter(TopoStagingPropriete.status == status)
+        if numero_ouverture:
+            query_prop = query_prop.filter(TopoStagingPropriete.numero_ouverture == numero_ouverture)
+        
+        proprietes = query_prop.order_by(TopoStagingPropriete.created_at.desc()).all()
+        
+        for p in proprietes:
+            fc = db.query(TopoStagingFile).filter(
+                TopoStagingFile.numero_ouverture == p.numero_ouverture
+            ).count()
+            
+            results.append({
+                "id": p.id,
+                "entity_type": "propriete",
+                "batch_id": str(p.batch_id),
+                "status": p.status.lower(),
+                "numero_ouverture": p.numero_ouverture,
+                "topo_user_name": p.topo_user_name,
+                "import_date": p.created_at.isoformat(),
+                "files_count": fc,
+                "raw_data": p.payload,
+                "is_archived": p.status == 'ARCHIVED',
+                "can_import": p.status in ['PENDING', 'ARCHIVED'],
+                "has_errors": bool(p.error_reason),
+                "error_summary": p.error_reason,
+                "rejection_reason": p.rejection_reason or p.error_reason,
+                "processed_at": p.rejected_at.isoformat() if p.rejected_at else (
+                    p.archived_at.isoformat() if p.archived_at else None
+                )
+            })
     
+    # FICHIERS ORPHELINS
     if not entity_type or entity_type == 'fichier':
-        q = db.query(TopoStagingFile)
+        q = db.query(TopoStagingFile).filter(
+            and_(
+                TopoStagingFile.numero_ouverture.isnot(None)
+            )
+        )
+        
         if numero_ouverture:
             q = q.filter(TopoStagingFile.numero_ouverture == numero_ouverture)
         
@@ -399,20 +470,54 @@ async def list_imports(status: Optional[str] = "PENDING", entity_type: Optional[
             key = f.numero_ouverture
             if key not in grouped:
                 grouped[key] = {"files": [], "first_upload": f.uploaded_at}
-            grouped[key]["files"].append({"id": f.id, "name": f.original_name, "size": f.file_size, "mime_type": f.mime_type, "category": f.category})
+            grouped[key]["files"].append({
+                "id": f.id,
+                "name": f.original_name,
+                "size": f.file_size,
+                "mime_type": f.mime_type,
+                "category": f.category
+            })
         
         for num, data in grouped.items():
-            results.append({"id": f"files_{num}", "entity_type": "fichier", "batch_id": f"files_{num}", "status": "pending",
-                          "numero_ouverture": num, "topo_user_name": "Import fichiers", "import_date": data["first_upload"].isoformat(),
-                          "files_count": len(data["files"]), "raw_data": {}, "is_archived": False, "can_import": True,
-                          "has_errors": False, "error_summary": None, "rejection_reason": None, "processed_at": None,
-                          "preview": {"files": data["files"]}})
+            results.append({
+                "id": f"files_{num}",
+                "entity_type": "fichier",
+                "batch_id": f"files_{num}",
+                "status": "pending",
+                "numero_ouverture": num,
+                "topo_user_name": "Import fichiers",
+                "import_date": data["first_upload"].isoformat(),
+                "files_count": len(data["files"]),
+                "raw_data": {},
+                "is_archived": False,
+                "can_import": True,
+                "has_errors": False,
+                "error_summary": None,
+                "rejection_reason": None,
+                "processed_at": None,
+                "preview": {"files": data["files"]}
+            })
     
+    # Trier par date
     results.sort(key=lambda x: x['import_date'], reverse=True)
-    stats = {"total": len(results), "pending": len([r for r in results if r['status'] == 'pending']),
-            "archived": len([r for r in results if r['status'] == 'archived']), "rejected": len([r for r in results if r['status'] == 'rejected'])}
     
-    return {"data": results, "stats": stats, "filters": {"status": status, "entity_type": entity_type, "numero_ouverture": numero_ouverture}}
+    # Calculer stats
+    stats = {
+        "total": len(results),
+        "pending": len([r for r in results if r['status'] == 'pending']),
+        "archived": len([r for r in results if r['status'] == 'archived']),
+        "rejected": len([r for r in results if r['status'] == 'rejected'])
+    }
+    
+    return {
+        "data": results,
+        "stats": stats,
+        "filters": {
+            "status": status.lower() if status else None,
+            "entity_type": entity_type,
+            "numero_ouverture": numero_ouverture
+        }
+    }
 
 # DETAIL IMPORT
 @app.get("/api/imports/{import_id}")
@@ -529,36 +634,115 @@ async def get_import(import_id: str, user: TopoUser = Depends(get_current_user),
 
 # ACTIONS IMPORT
 @app.put("/api/imports/{import_id}/action")
-async def import_action(import_id: str, action: str = Form(...), archived_note: Optional[str] = Form(None),
-                       rejection_reason: Optional[str] = Form(None), user_email: Optional[str] = Form(None),
-                       user: TopoUser = Depends(get_current_user), db: Session = Depends(get_db)):
-    if str(import_id).startswith("files_"):
-        return {"success": True, "message": "Import fichiers pret", "import_id": import_id, "new_status": "pending"}
+async def import_action(
+    import_id: str,
+    action: str = Form(...),
+    archived_note: Optional[str] = Form(None),
+    rejection_reason: Optional[str] = Form(None),
+    user_email: Optional[str] = Form(None),
+    user: TopoUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Action unifiee sur un import: archive, unarchive, reject
     
-    staging = db.query(TopoStagingDemandeur).filter(TopoStagingDemandeur.id == int(import_id)).first()
+    IMPORTANT: Les statuts en base sont en MAJUSCULES (PENDING, ARCHIVED, REJECTED)
+    """
+    
+    # Gerer les imports fichiers virtuels
+    if str(import_id).startswith("files_"):
+        return {
+            "success": True,
+            "message": "Import fichiers pret",
+            "import_id": import_id,
+            "new_status": "pending"
+        }
+    
+    # Chercher l'import (demandeur ou propriete)
+    staging = db.query(TopoStagingDemandeur).filter(
+        TopoStagingDemandeur.id == int(import_id)
+    ).first()
+    
     if not staging:
-        staging = db.query(TopoStagingPropriete).filter(TopoStagingPropriete.id == int(import_id)).first()
+        staging = db.query(TopoStagingPropriete).filter(
+            TopoStagingPropriete.id == int(import_id)
+        ).first()
+    
     if not staging:
         raise HTTPException(404, "Import introuvable")
     
     now = datetime.now(timezone.utc)
     email = user_email or user.email
     
-    if action == 'reject':
-        if not rejection_reason:
-            raise HTTPException(400, "Motif requis")
-        staging.status, staging.rejection_reason, staging.rejected_at, staging.rejected_by_email = 'REJECTED', rejection_reason, now, email
-    elif action == 'archive':
-        staging.status, staging.archived_at, staging.archived_by_email = 'ARCHIVED', now, email
-        if archived_note:
-            staging.archived_note = archived_note
-    elif action == 'unarchive':
-        staging.status, staging.archived_at, staging.archived_by_email, staging.archived_note = 'PENDING', None, None, None
-    else:
-        raise HTTPException(400, "Action invalide: reject, archive, unarchive")
+    # LOG AVANT ACTION
+    print(f"[ACTION] Import {import_id} - Statut actuel: {staging.status} - Action demandee: {action}")
     
-    db.commit()
-    return {"success": True, "message": f"Import {action}", "import_id": import_id, "new_status": staging.status.lower()}
+    # ✅ CORRECTION : Executer l'action selon le type
+    if action == 'reject':
+        # ✅ VALIDATION : Motif obligatoire
+        if not rejection_reason or len(rejection_reason.strip()) < 10:
+            raise HTTPException(400, "Motif de rejet requis (min 10 caracteres)")
+        
+        # ✅ VALIDATION : Seuls les PENDING peuvent être rejetés
+        if staging.status != 'PENDING':
+            raise HTTPException(400, f"Seuls les imports PENDING peuvent etre rejetes. Statut actuel: {staging.status}")
+        
+        # ✅ MISE À JOUR : Passer en REJECTED
+        staging.status = 'REJECTED'
+        staging.rejection_reason = rejection_reason.strip()
+        staging.rejected_at = now
+        staging.rejected_by_email = email
+        
+        print(f"[ACTION] Import {import_id} REJETE - Nouveau statut: {staging.status}")
+        
+    elif action == 'archive':
+        # ✅ VALIDATION : Seuls les PENDING peuvent être archivés
+        if staging.status != 'PENDING':
+            raise HTTPException(400, f"Seuls les imports PENDING peuvent etre archives. Statut actuel: {staging.status}")
+        
+        # ✅ MISE À JOUR : Passer en ARCHIVED
+        staging.status = 'ARCHIVED'
+        staging.archived_at = now
+        staging.archived_by_email = email
+        if archived_note:
+            staging.archived_note = archived_note.strip()
+        
+        print(f"[ACTION] Import {import_id} ARCHIVE - Nouveau statut: {staging.status}")
+        
+    elif action == 'unarchive':
+        # ✅ VALIDATION : Seuls les ARCHIVED peuvent être restaurés
+        if staging.status != 'ARCHIVED':
+            raise HTTPException(400, f"Seuls les imports ARCHIVED peuvent etre restaures. Statut actuel: {staging.status}")
+        
+        # ✅ MISE À JOUR : Repasser en PENDING
+        staging.status = 'PENDING'
+        staging.archived_at = None
+        staging.archived_by_email = None
+        staging.archived_note = None
+        
+        print(f"[ACTION] Import {import_id} RESTAURE - Nouveau statut: {staging.status}")
+        
+    else:
+        raise HTTPException(400, "Action invalide: archive, unarchive ou reject")
+    
+    # ✅ COMMIT EN BASE
+    try:
+        db.commit()
+        db.refresh(staging)
+        
+        print(f"[ACTION] Import {import_id} COMMIT OK - Statut final en base: {staging.status}")
+        
+    except Exception as e:
+        db.rollback()
+        print(f"[ACTION] ERREUR COMMIT: {e}")
+        raise HTTPException(500, f"Erreur lors de la mise a jour: {str(e)}")
+    
+    return {
+        "success": True,
+        "message": f"Import {action}",
+        "import_id": import_id,
+        "new_status": staging.status.lower()  # ← Retourner en minuscule pour le frontend
+    }
 
 # FICHIERS
 @app.get("/api/v1/files/{file_id}")
