@@ -1,7 +1,5 @@
+"""Routes authentification"""
 # app/api/v1/auth.py
-"""
-Routes d'authentification
-"""
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPBearer
 from sqlalchemy.orm import Session
@@ -10,25 +8,19 @@ from app.core.security import verify_password, create_token, decode_token, hash_
 from app.models.staging import TopoUser
 from app.schemas import LoginRequest, LoginResponse
 
-router = APIRouter(prefix="/auth", tags=["Authentification"])
+router = APIRouter(prefix="/auth", tags=["Auth"])
+security = HTTPBearer()
 
-# Définir get_current_user EN PREMIER (avant les routes qui l'utilisent)
-def get_current_user(
-    credentials = Depends(HTTPBearer()),
-    db: Session = Depends(get_db)
-) -> TopoUser:
-    """Dependency pour récupérer l'utilisateur authentifié"""
+def get_current_user(credentials = Depends(security), db: Session = Depends(get_db)) -> TopoUser:
     identifier = decode_token(credentials.credentials)
-    
     if not identifier:
-        raise HTTPException(status_code=401, detail="Token invalide")
+        raise HTTPException(401, "Token invalide")
     
     user = db.query(TopoUser).filter(
         (TopoUser.username == identifier) | (TopoUser.email == identifier)
     ).first()
     
     if not user and '@' in identifier:
-        # Création auto pour utilisateurs GeODOC
         user = TopoUser(
             username=identifier.split('@')[0],
             email=identifier,
@@ -41,30 +33,23 @@ def get_current_user(
         db.commit()
         db.refresh(user)
     
-    if not user:
-        raise HTTPException(status_code=401, detail="Utilisateur introuvable")
-    
-    if not user.is_active:
-        raise HTTPException(status_code=401, detail="Compte désactivé")
+    if not user or not user.is_active:
+        raise HTTPException(401, "Utilisateur introuvable ou desactive")
     
     return user
 
-
 @router.post("/login", response_model=LoginResponse)
 def login(data: LoginRequest, db: Session = Depends(get_db)):
-    """Connexion avec username/password"""
     user = db.query(TopoUser).filter(TopoUser.username == data.username).first()
     
     if not user or not verify_password(data.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Identifiants incorrects")
+        raise HTTPException(401, "Identifiants incorrects")
     
     if not user.is_active:
-        raise HTTPException(status_code=403, detail="Compte désactivé")
-    
-    token = create_token(user.email, user.role)
+        raise HTTPException(403, "Compte desactive")
     
     return LoginResponse(
-        access_token=token,
+        access_token=create_token(user.email, user.role),
         user={
             "id": user.id,
             "username": user.username,
@@ -74,10 +59,8 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
         }
     )
 
-
 @router.get("/me")
-def get_current_user_info(user: TopoUser = Depends(get_current_user)):
-    """Informations utilisateur connecté"""
+def get_me(user: TopoUser = Depends(get_current_user)):
     return {
         "id": user.id,
         "username": user.username,
