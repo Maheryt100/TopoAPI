@@ -1,36 +1,24 @@
-"""Routes demandeurs"""
+"""Routes demandeurs avec validateurs centralisés"""
 # app/api/v1/demandeurs.py
 from fastapi import APIRouter, Depends, Form, HTTPException
 from sqlalchemy.orm import Session
 from typing import Optional
-from datetime import date
 import hashlib
 import json
 
 from app.core.database import get_db
+from app.core.validators import validate_enum, validate_date, clean_payload
 from app.models.staging import TopoUser, TopoStagingDemandeur
 from app.schemas import ImportResponse
 from app.api.v1.auth import get_current_user
 
 router = APIRouter(prefix="/demandeurs", tags=["Demandeurs"])
 
+# Constantes de validation
 VALID_TITRES = ["Monsieur", "Madame", "Mademoiselle"]
 VALID_SEXES = ["Homme", "Femme"]
 VALID_SITUATIONS = ["Non specifiee", "Celibataire", "Marie(e)", "Veuf/Veuve", "Divorce(e)"]
 VALID_REGIMES = ["Non specifie", "Zara-Mira", "Kitay telo an-dalana", "Separations des biens"]
-
-def validate_enum(value: Optional[str], valid_values: list, field_name: str):
-    if value and value not in valid_values:
-        raise HTTPException(422, f"{field_name} invalide. Valeurs: {', '.join(valid_values)}")
-    return value
-
-def validate_date(value: Optional[str], field_name: str):
-    if value:
-        try:
-            date.fromisoformat(value)
-        except:
-            raise HTTPException(422, f"{field_name} format: YYYY-MM-DD")
-    return value
 
 @router.post("/", status_code=201, response_model=ImportResponse)
 async def create_demandeur(
@@ -60,33 +48,52 @@ async def create_demandeur(
     user: TopoUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    """
+    Crée un nouveau demandeur en staging
+    
+    Valide les champs enum et dates avant insertion
+    """
+    # Validations enum
     validate_enum(titre_demandeur, VALID_TITRES, "titre_demandeur")
     validate_enum(sexe, VALID_SEXES, "sexe")
     validate_enum(situation_familiale, VALID_SITUATIONS, "situation_familiale")
     validate_enum(regime_matrimoniale, VALID_REGIMES, "regime_matrimoniale")
     
+    # Validations dates
     validate_date(date_naissance, "date_naissance")
     validate_date(date_delivrance, "date_delivrance")
     validate_date(date_delivrance_duplicata, "date_delivrance_duplicata")
     validate_date(date_mariage, "date_mariage")
     
-    payload = {}
+    # Construction du payload propre
     fields = {
-        'cin': cin, 'titre_demandeur': titre_demandeur, 'nom_demandeur': nom_demandeur,
-        'prenom_demandeur': prenom_demandeur, 'date_naissance': date_naissance,
-        'lieu_naissance': lieu_naissance, 'sexe': sexe, 'occupation': occupation,
-        'nom_pere': nom_pere, 'nom_mere': nom_mere, 'date_delivrance': date_delivrance,
-        'lieu_delivrance': lieu_delivrance, 'date_delivrance_duplicata': date_delivrance_duplicata,
-        'lieu_delivrance_duplicata': lieu_delivrance_duplicata, 'domiciliation': domiciliation,
-        'telephone': telephone, 'nationalite': nationalite, 'situation_familiale': situation_familiale,
-        'regime_matrimoniale': regime_matrimoniale, 'date_mariage': date_mariage,
-        'lieu_mariage': lieu_mariage, 'marie_a': marie_a
+        'cin': cin, 
+        'titre_demandeur': titre_demandeur, 
+        'nom_demandeur': nom_demandeur,
+        'prenom_demandeur': prenom_demandeur, 
+        'date_naissance': date_naissance,
+        'lieu_naissance': lieu_naissance, 
+        'sexe': sexe, 
+        'occupation': occupation,
+        'nom_pere': nom_pere, 
+        'nom_mere': nom_mere, 
+        'date_delivrance': date_delivrance,
+        'lieu_delivrance': lieu_delivrance, 
+        'date_delivrance_duplicata': date_delivrance_duplicata,
+        'lieu_delivrance_duplicata': lieu_delivrance_duplicata, 
+        'domiciliation': domiciliation,
+        'telephone': telephone, 
+        'nationalite': nationalite, 
+        'situation_familiale': situation_familiale,
+        'regime_matrimoniale': regime_matrimoniale, 
+        'date_mariage': date_mariage,
+        'lieu_mariage': lieu_mariage, 
+        'marie_a': marie_a
     }
     
-    for key, value in fields.items():
-        if value and (isinstance(value, str) and value.strip() or not isinstance(value, str)):
-            payload[key] = value.strip() if isinstance(value, str) else value
+    payload = clean_payload(fields)
     
+    # Création du staging record
     staging = TopoStagingDemandeur(
         source='topo',
         topo_user_id=user.id,
@@ -97,9 +104,13 @@ async def create_demandeur(
         status='PENDING'
     )
     
-    db.add(staging)
-    db.commit()
-    db.refresh(staging)
+    try:
+        db.add(staging)
+        db.commit()
+        db.refresh(staging)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"Erreur lors de la sauvegarde: {str(e)}")
     
     return ImportResponse(
         success=True,

@@ -1,4 +1,4 @@
-"""Routes fichiers"""
+"""Routes fichiers avec validations renforcées"""
 # app/api/v1/files.py
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from sqlalchemy.orm import Session
@@ -21,14 +21,52 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 VALID_CATEGORIES = ["cin", "plan", "titre", "requisition", "autre"]
 
 async def save_file(file: UploadFile, numero_ouverture: str) -> dict:
+    """
+    Sauvegarde un fichier uploadé avec validations
+    
+    Args:
+        file: Fichier uploadé
+        numero_ouverture: Numéro de dossier
+        
+    Returns:
+        Dictionnaire avec métadonnées du fichier
+        
+    Raises:
+        HTTPException: Si validation échoue
+    """
+    # Création du répertoire de destination
     upload_dir = UPLOAD_DIR / "dossiers" / numero_ouverture
     upload_dir.mkdir(parents=True, exist_ok=True)
     
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    stored_name = f"{timestamp}_{hashlib.md5(file.filename.encode()).hexdigest()[:8]}{Path(file.filename).suffix}"
-    
+    # Lecture et validation de la taille
     contents = await file.read()
-    (upload_dir / stored_name).write_bytes(contents)
+    if len(contents) > settings.max_file_size:
+        max_mb = settings.max_file_size / 1024 / 1024
+        raise HTTPException(
+            413, 
+            f"Fichier trop volumineux: {len(contents)/1024/1024:.2f}MB (max {max_mb}MB)"
+        )
+    
+    # Validation de l'extension
+    file_ext = Path(file.filename).suffix.lower()
+    if file_ext not in settings.allowed_extensions:
+        raise HTTPException(
+            415, 
+            f"Type de fichier non autorisé: {file_ext}. "
+            f"Extensions acceptées: {', '.join(settings.allowed_extensions)}"
+        )
+    
+    # Génération du nom de fichier unique
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    file_hash = hashlib.md5(file.filename.encode()).hexdigest()[:8]
+    stored_name = f"{timestamp}_{file_hash}{file_ext}"
+    
+    # Sauvegarde du fichier
+    file_path = upload_dir / stored_name
+    try:
+        file_path.write_bytes(contents)
+    except Exception as e:
+        raise HTTPException(500, f"Erreur sauvegarde fichier: {str(e)}")
     
     return {
         'original_name': file.filename,
@@ -45,29 +83,57 @@ async def upload_files(
     user: TopoUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    """
+    Upload de fichiers avec transaction atomique
+    
+    En cas d'erreur, tous les fichiers uploadés sont supprimés
+    """
     if category and category not in VALID_CATEGORIES:
-        raise HTTPException(422, f"Categorie invalide. Valeurs: {', '.join(VALID_CATEGORIES)}")
+        raise HTTPException(
+            422, 
+            f"Catégorie invalide. Valeurs acceptées: {', '.join(VALID_CATEGORIES)}"
+        )
     
     cat = category or "autre"
     saved = []
+    saved_paths = []
     
-    for file in files:
-        try:
+    try:
+        # Upload de tous les fichiers
+        for file in files:
             info = await save_file(file, numero_ouverture)
+            
+            # Ajout en base
             db.add(TopoStagingFile(
                 numero_ouverture=numero_ouverture,
                 category=cat,
                 **info
             ))
+            
             saved.append({
                 "filename": info['original_name'],
                 "size": info['file_size'],
                 "category": cat
             })
-        except Exception as e:
-            raise HTTPException(500, f"Erreur upload: {e}")
-    
-    db.commit()
+            
+            saved_paths.append(
+                UPLOAD_DIR / "dossiers" / numero_ouverture / info['stored_name']
+            )
+        
+        # Commit atomique
+        db.commit()
+        
+    except HTTPException:
+        # Propagation des erreurs de validation
+        db.rollback()
+        cleanup_files(saved_paths)
+        raise
+        
+    except Exception as e:
+        # Rollback et nettoyage en cas d'erreur
+        db.rollback()
+        cleanup_files(saved_paths)
+        raise HTTPException(500, f"Erreur lors de l'upload: {str(e)}")
     
     return {
         "success": True,
@@ -75,3 +141,12 @@ async def upload_files(
         "files": saved,
         "dossier": {"numero_ouverture": numero_ouverture}
     }
+
+def cleanup_files(paths: List[Path]):
+    """Supprime les fichiers temporaires en cas d'erreur"""
+    for path in paths:
+        try:
+            if path.exists():
+                path.unlink()
+        except Exception:
+            pass  # Ignore les erreurs de nettoyage

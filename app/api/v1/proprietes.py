@@ -1,36 +1,24 @@
-"""Routes proprietes"""
+"""Routes propriétés avec validateurs centralisés"""
 # app/api/v1/proprietes.py
 from fastapi import APIRouter, Depends, Form, HTTPException
 from sqlalchemy.orm import Session
 from typing import Optional
-from datetime import date
 import hashlib
 import json
 
 from app.core.database import get_db
+from app.core.validators import validate_enum, validate_date, clean_payload
 from app.models.staging import TopoUser, TopoStagingPropriete
 from app.schemas import ImportResponse
 from app.api.v1.auth import get_current_user
 
 router = APIRouter(prefix="/proprietes", tags=["Proprietes"])
 
+# Constantes de validation
 VALID_CHARGES = ["Voie(s) publique(e)", "Voie(s) d'acces", "Servitude(s)", "Aucune"]
 VALID_NATURES = ["Urbaine", "Suburbaine", "Rurale"]
 VALID_VOCATIONS = ["Edilitaire", "Agricole", "Forestiere", "Touristique"]
 VALID_TYPES = ["Morcellement", "Immatriculation"]
-
-def validate_enum(value: Optional[str], valid_values: list, field_name: str):
-    if value and value not in valid_values:
-        raise HTTPException(422, f"{field_name} invalide. Valeurs: {', '.join(valid_values)}")
-    return value
-
-def validate_date(value: Optional[str], field_name: str):
-    if value:
-        try:
-            date.fromisoformat(value)
-        except:
-            raise HTTPException(422, f"{field_name} format: YYYY-MM-DD")
-    return value
 
 @router.post("/", status_code=201, response_model=ImportResponse)
 async def create_propriete(
@@ -59,37 +47,51 @@ async def create_propriete(
     user: TopoUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    """
+    Crée une nouvelle propriété en staging
+    
+    Valide les champs enum et dates avant insertion
+    """
+    # Validations enum
     validate_enum(charge, VALID_CHARGES, "charge")
     validate_enum(nature, VALID_NATURES, "nature")
     validate_enum(vocation, VALID_VOCATIONS, "vocation")
     validate_enum(type_operation, VALID_TYPES, "type_operation")
     
+    # Validations dates
     validate_date(date_requisition, "date_requisition")
     validate_date(date_depot_1, "date_depot_1")
     validate_date(date_depot_2, "date_depot_2")
     validate_date(date_approbation_acte, "date_approbation_acte")
     
-    payload = {}
+    # Construction du payload propre
     fields = {
-        'lot': lot, 'titre': titre, 'contenance': contenance, 'proprietaire': proprietaire,
-        'propriete_mere': propriete_mere, 'titre_mere': titre_mere, 'charge': charge,
-        'situation': situation, 'nature': nature, 'vocation': vocation,
-        'numero_FN': numero_FN, 'numero_requisition': numero_requisition,
-        'type_operation': type_operation, 'date_requisition': date_requisition,
-        'date_depot_1': date_depot_1, 'date_depot_2': date_depot_2,
-        'date_approbation_acte': date_approbation_acte, 'dep_vol_inscription': dep_vol_inscription,
+        'lot': lot, 
+        'titre': titre, 
+        'contenance': contenance, 
+        'proprietaire': proprietaire,
+        'propriete_mere': propriete_mere, 
+        'titre_mere': titre_mere, 
+        'charge': charge,
+        'situation': situation, 
+        'nature': nature, 
+        'vocation': vocation,
+        'numero_FN': numero_FN, 
+        'numero_requisition': numero_requisition,
+        'type_operation': type_operation, 
+        'date_requisition': date_requisition,
+        'date_depot_1': date_depot_1, 
+        'date_depot_2': date_depot_2,
+        'date_approbation_acte': date_approbation_acte, 
+        'dep_vol_inscription': dep_vol_inscription,
         'numero_dep_vol_inscription': numero_dep_vol_inscription,
         'dep_vol_requisition': dep_vol_requisition,
         'numero_dep_vol_requisition': numero_dep_vol_requisition
     }
     
-    for key, value in fields.items():
-        if value is not None:
-            if isinstance(value, str) and value.strip():
-                payload[key] = value.strip()
-            elif not isinstance(value, str):
-                payload[key] = value
+    payload = clean_payload(fields)
     
+    # Création du staging record
     staging = TopoStagingPropriete(
         source='topo',
         topo_user_id=user.id,
@@ -100,9 +102,13 @@ async def create_propriete(
         status='PENDING'
     )
     
-    db.add(staging)
-    db.commit()
-    db.refresh(staging)
+    try:
+        db.add(staging)
+        db.commit()
+        db.refresh(staging)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"Erreur lors de la sauvegarde: {str(e)}")
     
     return ImportResponse(
         success=True,
