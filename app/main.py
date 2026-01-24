@@ -1,13 +1,13 @@
+# app/main.py
 """
 FastAPI TopoManager - Application principale
-Version simplifiee avec 6 endpoints essentiels
+Version avec téléchargement de fichiers sécurisé
 """
-# app/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import Base, engine
 from app.core.config import get_settings
-from app.api.v1 import auth, demandeurs, proprietes, files, imports
+from app.api.v1 import auth, demandeurs, proprietes, files, imports, download
 
 settings = get_settings()
 
@@ -16,7 +16,7 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description="API simplifiee pour imports terrain TopoManager"
+    description="API pour imports terrain TopoManager avec téléchargement sécurisé"
 )
 
 app.add_middleware(
@@ -27,18 +27,29 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
+# Routes existantes
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(demandeurs.router, prefix="/api/v1")
 app.include_router(proprietes.router, prefix="/api/v1")
 app.include_router(files.router, prefix="/api/v1")
 app.include_router(imports.router, prefix="/api/imports")
 
+# Nouvelle route de téléchargement
+app.include_router(download.router, prefix="/api/v1")
+
 @app.get("/")
 def root():
     return {
         "app": settings.app_name,
         "version": settings.app_version,
-        "status": "healthy"
+        "status": "healthy",
+        "features": [
+            "Authentication JWT",
+            "Import demandeurs/proprietes",
+            "Upload fichiers",
+            "Download fichiers sécurisé",
+            "ZIP automatique"
+        ]
     }
 
 @app.get("/health")
